@@ -13,7 +13,6 @@ jobs:
   check-update:
     runs-on: ubuntu-latest
     outputs:
-      update: ${{ steps.compare.outputs.update }}
       latest_version: ${{ steps.latest.outputs.version }}
       issue_number: ${{ steps.create_issue.outputs.issue_number }}
       new_issue: ${{ steps.create_issue.outputs.new_issue }}
