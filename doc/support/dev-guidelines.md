@@ -230,10 +230,7 @@ All repositories follow **Semantic Versioning** (`MAJOR.MINOR.PATCH`). The `libr
 | Component | Bump rule | Version field |
 |---|---|---|
 | GEMS Language / Documentation | Versioned together with the documentation. Major: breaking syntax change / Minor: new construct or keyword / Patch: clarification or doc fix | Release notes at `doc/0_Home/4_release_notes.md` |
-| basic\_models\_library | Major: new model / Minor: bug fix or improvement / Patch: rename or refactor | `library.version` in `libraries/basic_models_library.yml` |
-| antares\_legacy\_models | Major: new model / Minor: bug fix or improvement / Patch: rename or refactor | `library.version` in `libraries/antares_legacy_models.yml` |
-| pypsa\_models | Major: new model / Minor: bug fix or improvement / Patch: rename or refactor | `library.version` in `libraries/pypsa_models.yml` |
-| andromede\_models | Major: new model / Minor: bug fix or improvement / Patch: rename or refactor | `library.version` in `libraries/andromede_models.yml` |
+| Model libraries (`libraries/*.yml`) | Major: new model / Minor: bug fix or improvement / Patch: rename or refactor | `library.version` inside each `libraries/<library_name>.yml` |
 | Antares-Simulator | Pinned version used by CI and E2E tests | `dependencies.json` → `antares_simulator_version` |
 
 ---
@@ -302,17 +299,18 @@ Each repository automatically maintains SHA256 checksum files alongside its libr
 
 | Workflow | Repo | Trigger | Scope |
 |---|---|---|---|
-| `update-library-checksums` | GEMS | Push to any `release/**` or `hotfix/**` branch | `libraries/` (excludes `pypsa_models.yml` and `antares_legacy_models.yml`) |
-| `update-library-checksums` | PyPSA Converter | Push to any `release/**` or `hotfix/**` branch | `resources/pypsa_models/` |
-| `update-library-checksums` | AntaresLegacy Converter | Push to any `release/**` or `hotfix/**` branch | `src/antares_gems_converter/libs/` |
+| `update-library-checksums` | GEMS | Push to `release/**` or `hotfix/**` touching `libraries/*.yml` | `libraries/` (excludes `pypsa_models.yml` and `antares_legacy_models.yml`) |
+| `update-library-checksums` | PyPSA Converter | Push to `release/**` or `hotfix/**` touching `resources/pypsa_models/*.yml` | `resources/pypsa_models/` |
+| `update-library-checksums` | AntaresLegacy Converter | Push to `release/**` or `hotfix/**` touching `src/antares_gems_converter/libs/**/*.yml` | `src/antares_gems_converter/libs/` |
 
 **How it works:**
 
-- Runs on every push to a `release/vX.Y.Z` or `hotfix/vX.Y.Z` branch (does not appear on regular feature/bugfix PRs).
-- If no `.sha256` file exists → generated and committed back to the release branch automatically.
+- Runs on every push to a `release/**` or `hotfix/**` branch that touches a library YAML.
+- If no `.sha256` file exists → generated and committed back to the branch automatically.
 - If the hash matches the stored one → no action.
-- If the hash differs → `.sha256` file updated and committed back to the release branch automatically.
-- By the time the release PR is merged, all checksums are guaranteed to be in sync.
+- If the hash differs → `.sha256` file updated and committed back to the branch automatically.
+
+> ⚠️ **WARNING: THE CHECKSUM WORKFLOW FIRES WHENEVER YOU PUSH TO A `release/**` OR `hotfix/**` BRANCH AND THE PUSH CONTAINS LIBRARY YAML CHANGES — WHETHER YOU EDITED THE LIBRARY DIRECTLY ON THAT BRANCH OR THE LIBRARY WAS ALREADY MODIFIED IN THE COMMITS CARRIED OVER FROM `develop` OR `main` WHEN THE BRANCH WAS CREATED. IN BOTH CASES THE WORKFLOW WILL AUTOMATICALLY COMMIT AN UPDATED CHECKSUM BACK TO YOUR BRANCH. YOU MUST RUN `git pull` BEFORE MAKING ANY FURTHER LOCAL CHANGES OR PUSHES, OTHERWISE YOUR NEXT PUSH WILL BE REJECTED DUE TO DIVERGED HISTORY.**
 
 The `pypsa_models.yml` and `antares_legacy_models.yml` libraries in GEMS repository are excluded from `update-library-checksums` workflow because their checksums are managed by the respective converter repositories.
 
@@ -354,8 +352,7 @@ develop  ──── squash PRs (feature, bugfix, chore…) ────► rea
                           create release/vX.Y.Z from develop
                                       │
                           bump versions + update changelogs
-                          on release branch
-                          checksum workflow auto-commits if needed
+                          (checksum auto-commits if library changed)
                                       │
                           open PR: release/vX.Y.Z → main
                           (squash & merge)
@@ -365,6 +362,9 @@ develop  ──── squash PRs (feature, bugfix, chore…) ────► rea
                                       ▼
                           manually create tag vX.Y.Z + GitHub release
                           via GitHub UI
+                                      │
+                                      ▼
+                          merge main back into develop
 ```
 
 **Converter repositories:**
@@ -375,7 +375,7 @@ main  ──── squash PRs (feature, bugfix, chore…) ────► ready 
                           create release/vX.Y.Z from main
                                       │
                           bump versions + update changelogs
-                          on release branch
+                          (checksum auto-commits if library changed)
                                       │
                           open PR: release/vX.Y.Z → main
                           (squash & merge)
@@ -426,7 +426,6 @@ The example below releases converter version `1.2.0` with a library bump to `1.1
 3. Open a PR from `release/v1.2.0` targeting `main`
    - Title: `[PR] Release v1.2.0`
    - Labels: `release:minor` / `release:major` / `release:patch`
-   - The checksum workflow runs automatically and commits any missing or outdated `.sha256` files to the release branch
    - Merge strategy: **Squash & Merge**
 
 4. Go to GitHub → Releases → Draft a new release → create tag `v1.2.0` on `main` → paste the changelog entry → publish.
@@ -463,12 +462,6 @@ Cross-repo notification (automatic) — if `library.version` in `src/antares_gem
 
 ### 9.3 GEMS Release
 
-A GEMS release is typically triggered by:
-
-- An incoming notification issue from a converter (library updated — process **LT-02**)
-- A new Antares-Simulator release affecting libraries (process **LT-01**)
-- A new internal library or taxonomy (process **LT-03**)
-
 The example below releases GEMS version `1.2.0` after syncing an updated PyPSA models library.
 
 #### GEMS — Files to update
@@ -504,12 +497,19 @@ The example below releases GEMS version `1.2.0` after syncing an updated PyPSA m
 3. Open a PR from `release/v1.2.0` targeting `main`
    - Title: `[PR] Release v1.2.0`
    - Labels: `release:minor` / `release:major` / `release:patch`
-   - The checksum workflow runs automatically and commits any missing or outdated `.sha256` files to the release branch
    - Merge strategy: **Squash & Merge**
 
 4. Go to GitHub → Releases → Draft a new release → create tag `v1.2.0` on `main` → paste the changelog entry → publish.
 
-5. Close the notification issue that triggered this release (e.g. `[PYPSA MODELS] New library version: v1.1.0`).
+5. Merge `main` back into `develop` to keep it in sync:
+
+   ```bash
+   git checkout develop
+   git merge main
+   git push origin develop
+   ```
+
+6. Close the notification issue that triggered this release (e.g. `[PYPSA MODELS] New library version: v1.1.0`).
 
 ---
 
@@ -533,7 +533,7 @@ For critical issues discovered after a release:
 4. Open a PR from `hotfix/vX.Y.Z` targeting `main` (two approvals recommended)
 5. Merge via **Squash & Merge**
 6. Go to GitHub → Releases → Draft a new release → create tag `vX.Y.Z` on `main` → paste the changelog entry → publish.
-7. **GEMS only** — merge `main` back into `develop` to keep it in sync:
+7. **GEMS only** — merge `main` back into `develop`:
 
    ```bash
    git checkout develop
