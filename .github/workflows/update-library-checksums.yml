@@ -5,6 +5,8 @@ on:
     branches:
       - 'release/**'
       - 'hotfix/**'
+    paths:
+      - 'libraries/*.yml'
   workflow_dispatch:
 
 permissions:
@@ -18,9 +20,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check and update SHA256 checksums
         id: checksums
